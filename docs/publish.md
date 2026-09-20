@@ -98,6 +98,7 @@ source_url: https://example.com
 | image_list | ❌  | 图片路径列表（小绿书专用，最多 20 张） |
 | need_open_comment | ❌  | 是否打开评论 |
 | only_fans_can_comment | ❌  | 是否仅粉丝可评论 |
+| digest | ❌  | 图文消息的摘要，透传给`draft_add`接口 |
 
 说明：
 
