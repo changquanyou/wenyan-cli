@@ -5,3 +5,12 @@ dist/
 .env*
 *.tsbuildinfo
 .github/copilot-instructions.md
+
+# macOS
+.DS_Store
+
+# mify-image-gen skill: local secrets and caches (never commit API keys)
+skills/mify-image-gen/config/credentials.json
+skills/mify-image-gen/cache/
+**/__pycache__/
+*.pyc

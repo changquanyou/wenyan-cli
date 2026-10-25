@@ -1,0 +1,11 @@
+{
+  "default_model": "gemini-3-pro-image",
+  "image_output_dir": "",
+  "optimize_model": "deepseek/deepseek-flash",
+  "optimize_provider": "deepseek",
+  "model_configs": {},
+  "skip_optimize": false,
+  "prompt_language": "auto",
+  "img2img_size_mode": "follow_input",
+  "padding_enabled": true
+}

@@ -1,0 +1,106 @@
+{
+  "providers": {
+    "volcengine_maas": {
+      "host": "http://model.mify.ai.srv/v1",
+      "image_encoding": "data_uri",
+      "configurable_params": ["size", "watermark"]
+    },
+    "tongyi": {
+      "host": "http://model.mify.ai.srv/v1",
+      "image_encoding": "data_uri",
+      "configurable_params": ["size", "negative_prompt", "prompt_extend", "watermark", "n"]
+    },
+    "vertex_ai": {
+      "host": "http://model-sgp.mify.ai.srv/v1",
+      "image_encoding": "raw_base64",
+      "configurable_params": ["size", "imageSize"]
+    },
+    "azure_openai": {
+      "host": "http://model.mify.ai.srv/v1",
+      "image_encoding": "data_uri",
+      "configurable_params": ["size", "quality", "n", "output_format", "output_compression", "input_fidelity", "background"]
+    }
+  },
+  "models": {
+    "Doubao-Seedream-5.0-lite": {
+      "provider": "volcengine_maas",
+      "defaults": {"size": "2K", "watermark": false},
+      "supports_img2img": true
+    },
+    "Doubao-Seedream-5.0-pro": {
+      "provider": "volcengine_maas",
+      "defaults": {"size": "2K", "watermark": false},
+      "supports_img2img": true
+    },
+    "Doubao-Seedream-4.5": {
+      "provider": "volcengine_maas",
+      "defaults": {"size": "2K", "watermark": false},
+      "supports_img2img": true
+    },
+    "Doubao-Seedream-4.0": {
+      "provider": "volcengine_maas",
+      "defaults": {"size": "2K", "watermark": false},
+      "supports_img2img": true
+    },
+    "qwen-image-2.0": {
+      "provider": "tongyi",
+      "defaults": {"size": "2048*2048", "prompt_extend": false, "negative_prompt": "", "watermark": false, "n": 1},
+      "supports_img2img": true
+    },
+    "qwen-image-2.0-pro": {
+      "provider": "tongyi",
+      "defaults": {"size": "2048*2048", "prompt_extend": false, "negative_prompt": "", "watermark": false, "n": 1},
+      "supports_img2img": true
+    },
+    "qwen-image-3.0": {
+      "provider": "tongyi",
+      "defaults": {"size": "2048*2048", "prompt_extend": false, "negative_prompt": "", "watermark": false, "n": 1},
+      "supports_img2img": true
+    },
+    "qwen-image-3.0-pro": {
+      "provider": "tongyi",
+      "defaults": {"size": "2048*2048", "prompt_extend": false, "negative_prompt": "", "watermark": false, "n": 1},
+      "supports_img2img": true
+    },
+    "wan2.6-t2i": {
+      "provider": "tongyi",
+      "defaults": {"size": "1280*1280", "prompt_extend": false, "negative_prompt": "", "watermark": false, "n": 1},
+      "supports_img2img": false
+    },
+    "z-image-turbo": {
+      "provider": "tongyi",
+      "defaults": {"size": "1024*1024", "prompt_extend": false, "negative_prompt": "", "watermark": false, "n": 1},
+      "supports_img2img": false
+    },
+    "gemini-2.5-flash-image": {
+      "provider": "vertex_ai",
+      "defaults": {"size": "1:1", "imageSize": "1K"},
+      "supports_img2img": true
+    },
+    "gemini-3-pro-image": {
+      "provider": "vertex_ai",
+      "defaults": {"size": "1:1", "imageSize": "2K"},
+      "supports_img2img": true
+    },
+    "gemini-3.1-flash-image": {
+      "provider": "vertex_ai",
+      "defaults": {"size": "1:1", "imageSize": "2K"},
+      "supports_img2img": true
+    },
+    "gpt-image-2": {
+      "provider": "azure_openai",
+      "defaults": {"size": "1536x1024", "quality": "auto", "n": 1, "output_format": "png", "output_compression": 100, "input_fidelity": "high", "background": "auto"},
+      "supports_img2img": true
+    },
+    "gpt-image-2.5-flare": {
+      "provider": "azure_openai",
+      "defaults": {"size": "1536x1024", "quality": "auto", "n": 1, "output_format": "png", "output_compression": 100, "input_fidelity": "high", "background": "auto"},
+      "supports_img2img": true
+    },
+    "gpt-image-2.5-sunburst": {
+      "provider": "azure_openai",
+      "defaults": {"size": "1536x1024", "quality": "auto", "n": 1, "output_format": "png", "output_compression": 100, "input_fidelity": "high", "background": "auto"},
+      "supports_img2img": true
+    }
+  }
+}
