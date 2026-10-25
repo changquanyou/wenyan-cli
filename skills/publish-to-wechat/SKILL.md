@@ -9,7 +9,13 @@ description: "AI-ready skill to format and publish Markdown articles to WeChat O
 
 ## 前置要求
 
-- **环境配置**：必须设置 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET` 环境变量。
+- **环境配置**：必须设置 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET` 环境变量。这两个凭证已写入用户的 `~/.zshrc`，因此在执行任何 `wenyan` 命令前，**必须先 `source ~/.zshrc` 以加载凭证**：
+
+    ```bash
+    source ~/.zshrc && wenyan publish -f my-article.md
+    ```
+
+    > ⚠️ Agent 执行的每个 shell 调用都是独立进程，不会继承上一次的环境变量。因此 **每一条调用 `wenyan` 的命令都要在同一行前置 `source ~/.zshrc &&`**，否则会报 `invalid credential`。
 - **依赖工具**：已安装 `wenyan-cli` (`pnpm add -g @wenyan-md/cli`)。
 
 ## 核心能力
@@ -28,11 +34,52 @@ description: "AI-ready skill to format and publish Markdown articles to WeChat O
 ```yaml
 ---
 title: 文章标题
-cover: ./cover.jpg # 若缺省则自动取正文第一张图
+cover: ./cover.jpg # 若缺省则自动取正文第一张图；推荐用下方流程动态生成
 author: 作者名称 # 可选
 source_url: https://example.com/original-article # 可选，原文链接
 ---
 ```
+
+### 头图（封面）动态生成规范
+
+当文章 **没有现成封面** 或用户要求“生成头图/封面”时，Agent 应调用 `mify-image-gen` 技能动态生成一张与文章内容匹配的头图，然后写回 frontmatter 的 `cover` 字段。
+
+**1. API Key 获取方式**（与微信凭证不同）
+
+图像 API Key 已写入用户的 `~/.zshrc`，变量名为 **`MIFY_IMAGE_KEY`**（`sk-` 开头）。但 `mify-image-gen` 脚本本身 **不直接读环境变量**，它只读该技能的 `config/credentials.json`（字段 `image_api_key`）。因此首次使用前要把环境变量“灌”进技能配置一次：
+
+```bash
+# 加载 ~/.zshrc 得到 $MIFY_IMAGE_KEY，再写入技能凭证（幂等，重复执行无副作用）
+source ~/.zshrc && python3 <mify-image-gen>/scripts/preflight.py --set-key "$MIFY_IMAGE_KEY"
+```
+
+- 校验：运行 `python3 <mify-image-gen>/scripts/preflight.py`，`ready:true` 即可生成；
+- 若报 `image_api_key not configured`，说明还没灌入，执行上面那条命令；
+- 若 `$MIFY_IMAGE_KEY` 为空，说明 `~/.zshrc` 未设置，向用户索要后 `--set-key sk-xxxx`。
+
+> `<mify-image-gen>` = 该技能目录（通常 `~/.claude/skills/mify-image-gen` 或本仓库 `skills/mify-image-gen`）。
+
+**2. 头图尺寸规范**
+
+微信公众号封面大图（分享大图）标准比例约为 **2.35 : 1**，但要迁就不同模型支持的尺寸，统一按下表选 `--size`，生成后可在微信后台裁剪定位：
+
+- **默认模型 `gemini-3-pro-image`（宽高比制）**：只接受固定比例集 `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9`，**不支持 2.35:1**。头图用最接近的宽屏比例 **`--size 16:9`**（传 2.35:1 会报 `Invalid vertex_ai aspect ratio`）。
+- **像素模型（volcengine / tongyi / GPT Image）**：传像素值 **`--size 1146x488`**（2.35:1）即可，脚本会按 provider 规则校验/适配。
+
+**3. 从 MD 提取内容生成头图的流程**
+
+1. 读取目标 Markdown，提取 `title` 与正文前几段的核心主题/关键词，归纳出一句画面描述（主体 + 场景 + 风格，中文即可）。
+2. 调用图像生成（非 ASCII prompt 先写入 `<mify-image-gen>/cache/prompt_<ts>.txt` 再用 `--prompt-file`）：
+    ```bash
+    # 默认 gemini-3-pro-image：用 16:9
+    python3 <mify-image-gen>/scripts/generate_image.py \
+      --prompt-file <mify-image-gen>/cache/prompt_<ts>.txt \
+      --size 16:9 \
+      --output-dir <文章所在目录>
+    # 像素模型（如 volcengine）：--model <pixel-model> --size 1146x488
+    ```
+3. 从返回 JSON 读取 `local_path`，将其写回文章 frontmatter 的 `cover` 字段（建议用绝对路径）。
+4. 继续执行发布（`source ~/.zshrc && wenyan publish ...`），封面随草稿一起上传素材库。
 
 ### 核心参数说明
 
@@ -45,12 +92,12 @@ source_url: https://example.com/original-article # 可选，原文链接
 
 ### 1. 标准发布 (使用默认配置)
 ```bash
-wenyan publish -f my-article.md
+source ~/.zshrc && wenyan publish -f my-article.md
 ```
 
 ### 2. 指定内置主题与高亮发布
 ```bash
-wenyan publish -f article.md -t orangeheart -h solarized-light
+source ~/.zshrc && wenyan publish -f article.md -t orangeheart -h solarized-light
 ```
 
 ### 3. 列出所有可用主题
@@ -61,6 +108,6 @@ wenyan theme -l
 ## 故障排除 (Agent 专用)
 
 - **IP 限制错误 (invalid ip)**：提醒用户将当前环境的出口 IP 加入微信后台的“IP 白名单”。
-- **AppID/Secret 错误**：检查环境变量是否正确注入。
+- **AppID/Secret 错误 (invalid credential)**：确认命令是否已前置 `source ~/.zshrc &&`；若仍失败，检查 `~/.zshrc` 中 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` 是否正确。
 - **图片上传失败**：确认 Markdown 中的本地图片路径在当前目录中真实存在。
 - **发布排版不符预期**：检查 YAML Frontmatter 是否符合规范。
