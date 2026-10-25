@@ -47,10 +47,12 @@ description: "AI-ready skill to format and publish Markdown articles to WeChat O
 ---
 title: 文章标题
 cover: ./cover.jpg # 若缺省则自动取正文第一张图；推荐用下方流程动态生成
-author: 作者名称 # 可选
+author: A_You # ⛓️ 固定值，务必填 A_You，不要随机生成或改成其它作者名
 source_url: https://example.com/original-article # 可选，原文链接
 ---
 ```
+
+> ⛓️ **作者铁律**：`author` 字段**一律固定为 `A_You`**。除非用户在当前对话中明确要求换成别的作者名，否则生成文章时必须写死 `author: A_You`，不得随机生成、不得留空、不得沿用示例中的「作者名称」占位符。
 
 ### 头图（封面）动态生成规范
 
@@ -122,6 +124,10 @@ source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.j
 ## 故障排除 (Agent 专用)
 
 - **IP 限制错误 (invalid ip)**：提醒用户将当前环境的出口 IP 加入微信后台的“IP 白名单”。
-- **AppID/Secret 错误 (invalid credential)**：确认命令是否已前置 `source ~/.zshrc &&`；若仍失败，检查 `~/.zshrc` 中 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` 是否正确。
+- **40001 invalid credential / "could get access_token by getStableAccessToken"（高频坑）**：本公众号启用了**固定 access_token（stable_token）**模式，CLI 默认走的普通 `/cgi-bin/token` 端点返回的凭证会被写接口拒绝（报 40001），而**读接口不报错**，极具迷惑性。两处要同时处理：
+    1. **清掉 CLI 的本地 token 缓存**：`rm ~/.config/wenyan-md/token.json`（缓存里可能存着失效的旧 token，会一直被复用）。
+    2. **让 CLI 改用 stable_token 端点**：patch 已安装包 `/opt/homebrew/lib/node_modules/@wenyan-md/cli/node_modules/@wenyan-md/core/dist/wechat.js` 的 `fetchAccessToken`，把 `GET /cgi-bin/token` 改为 `POST https://api.weixin.qq.com/cgi-bin/stable_token`（body: `{grant_type:"client_credential", appid, secret}`）。该 patch 在 `pnpm add -g` 升级后会被覆盖，升级后需重新打。
+    - 快速判断：拿 stable_token 做一次写操作若报 40007（而非 40001），说明凭证已过认证、只是缺 media_id——证明必须用 stable_token。
+- **AppID/Secret 错误**：确认命令是否已前置 `source ~/.zshrc &&`；若仍失败，检查 `~/.zshrc` 中 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` 是否正确。
 - **图片上传失败**：确认 Markdown 中的本地图片路径在当前目录中真实存在。
 - **发布排版不符预期**：检查 YAML Frontmatter 是否符合规范。
