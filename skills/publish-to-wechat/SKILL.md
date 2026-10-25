@@ -18,6 +18,18 @@ description: "AI-ready skill to format and publish Markdown articles to WeChat O
     > ⚠️ Agent 执行的每个 shell 调用都是独立进程，不会继承上一次的环境变量。因此 **每一条调用 `wenyan` 的命令都要在同一行前置 `source ~/.zshrc &&`**，否则会报 `invalid credential`。
 - **依赖工具**：已安装 `wenyan-cli` (`pnpm add -g @wenyan-md/cli`)。
 
+## ⛓️ 铁律：用 node 直接调用 CLI 发布（务必遵守）
+
+> **发布文章时，一律使用下面这条命令，不要用裸 `wenyan` 命令：**
+>
+> ```bash
+> source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.js publish -f 文件.md -t orangeheart
+> ```
+>
+> **为什么必须这样：** `wenyan` 只是指向 `.../@wenyan-md/cli/dist/cli.js` 的软链接。Agent 子 shell 的 PATH 上若存在一个有问题的 `node`，裸 `wenyan` 会**静默无任何输出、退出码却为 0**——看起来成功，实则草稿从未写入微信草稿箱，极具迷惑性。改用 `node <cli 绝对路径>` 显式调用正确的 node，才能拿到真正的回执：`发布成功，Media ID: xxxx`。
+>
+> **发布后务必二次核验**（退出码 0 ≠ 真的发布成功）：拿 `WECHAT_APP_ID/SECRET` 换 access_token，调 `cgi-bin/draft/count` 看草稿数是否 +1、`cgi-bin/draft/batchget` 确认标题/封面无误。只有在草稿箱里真实看到这篇，才算发布成功。
+
 ## 核心能力
 
 - **自动化排版**：支持多种内置主题（如 `orangeheart`）和代码高亮方案。
@@ -90,19 +102,21 @@ source ~/.zshrc && python3 <mify-image-gen>/scripts/preflight.py --set-key "$MIF
 
 ## 常用操作示例
 
+> 以下示例统一遵守上面的「铁律」：用 `node <cli 绝对路径>` 显式调用，避免裸 `wenyan` 的静默失败。
+
 ### 1. 标准发布 (使用默认配置)
 ```bash
-source ~/.zshrc && wenyan publish -f my-article.md
+source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.js publish -f my-article.md
 ```
 
 ### 2. 指定内置主题与高亮发布
 ```bash
-source ~/.zshrc && wenyan publish -f article.md -t orangeheart -h solarized-light
+source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.js publish -f article.md -t orangeheart -h solarized-light
 ```
 
 ### 3. 列出所有可用主题
 ```bash
-wenyan theme -l
+source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.js theme -l
 ```
 
 ## 故障排除 (Agent 专用)
