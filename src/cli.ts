@@ -22,11 +22,13 @@ import input from "@inquirer/input";
 import password from "@inquirer/password";
 import { loadEnvFile } from "node:process";
 import { resolveApiKey } from "./api-key.js";
+import { primeStableToken } from "./stable-token.js";
 
 interface CLIPublishOptions extends ClientPublishOptions {
     apiKeyFile?: string;
     proxy?: string;
     envFile?: string;
+    stableToken?: boolean;
 }
 
 export function createProgram(version: string = pkg.version): Command {
@@ -65,6 +67,10 @@ export function createProgram(version: string = pkg.version): Command {
         .option("--api-key-file <path>", "Read the remote server API key from a file")
         .option("--env-file <file>", "Path to a .env file to load environment variables from")
         .option("--proxy <url>", "Proxy URL to use for requests, ex: http://127.0.0.1:1080")
+        .option(
+            "--stable-token",
+            "Use WeChat stable_token endpoint for credentials (required when the MP account enables 固定 access_token; avoids 40001 invalid credential on publish)"
+        )
         .action(async (inputContent: string | undefined, options: CLIPublishOptions) => {
             await runCommandWrapper(async () => {
                 // 读取环境变量文件（如果提供了 --env-file 选项）
@@ -74,6 +80,11 @@ export function createProgram(version: string = pkg.version): Command {
 
                 // 设置代理（如果提供了 --proxy 选项）
                 await setupProxy(options.proxy);
+
+                // 本地发布模式下，若账号启用了固定 access_token，先用 stable_token 预置凭证
+                if (options.stableToken && !options.server) {
+                    await primeStableToken(options.appId);
+                }
 
                 // 如果传入了 --server，则走客户端（远程）模式
                 if (options.server) {
