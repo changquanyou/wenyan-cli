@@ -54,6 +54,14 @@ source_url: https://example.com/original-article # 可选，原文链接
 
 > ⛓️ **作者铁律**：`author` 字段**一律固定为 `A_You`**。除非用户在当前对话中明确要求换成别的作者名，否则生成文章时必须写死 `author: A_You`，不得随机生成、不得留空、不得沿用示例中的「作者名称」占位符。
 
+> ⛓️ **标题不要重复（高频视觉 bug）**：微信文章标题由 frontmatter 的 `title` 提供，并会自动显示在文章顶部。因此正文**不要再写一个和标题相同的 `# 一级标题 (H1)`**，否则读者会在文章开头看到**标题出现两次**。正文直接从引言 `>` 或第一个 `##` 二级标题开始。若正文确实需要一个与标题不同的大标题，才用 `#`。
+
+### 正文结构约束（避免常见排版问题）
+
+- **不要重复 H1**：见上。正文首个标题从 `##` 开始。
+- **mermaid 图会被正常渲染**：wenyan 会把 ```mermaid 代码块渲染成 **SVG 矢量图**（不是代码块），流程图/时序图都支持。可放心用 mermaid 画架构图，无需自己转图片。
+- **本地图片用相对路径**：相对 Markdown 文件所在目录，如 `assets/<slug>/fig1.png`。发布时会自动上传到微信素材库并替换为 `mmbiz.qpic.cn` 地址。
+
 ### 头图（封面）动态生成规范
 
 当文章 **没有现成封面** 或用户要求“生成头图/封面”时，Agent 应调用 `mify-image-gen` 技能动态生成一张与文章内容匹配的头图，然后写回 frontmatter 的 `cover` 字段。
@@ -121,17 +129,56 @@ source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.j
 source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.js theme -l
 ```
 
+## 发布后二次核验（务必做，含图片真伪）
+
+退出码 0 ≠ 真的成功。每次发布后用 stable_token 换 access_token，调 `cgi-bin/draft/batchget`（`no_content:0`）核验：
+
+```bash
+sleep 3; source ~/.zshrc
+TOKEN=$(curl -s "https://api.weixin.qq.com/cgi-bin/stable_token" -X POST \
+  -d "{\"grant_type\":\"client_credential\",\"appid\":\"$WECHAT_APP_ID\",\"secret\":\"$WECHAT_APP_SECRET\"}" \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+curl -s "https://api.weixin.qq.com/cgi-bin/draft/batchget?access_token=$TOKEN" \
+  -X POST -d '{"offset":0,"count":1,"no_content":0}' | python3 -I -c "
+import sys,json,re,urllib.request
+d=json.load(sys.stdin); it=d['item'][0]['content']['news_item'][0]
+print('TITLE:', it['title']); print('AUTHOR:', it.get('author'))
+imgs=re.findall(r'<img[^>]*?src=\"([^\"]*)\"', it['content'])
+print('IMAGES:', len(imgs), '| MERMAID SVG:', it['content'].count('<svg'))
+# 实测抽查一张图是否真的可访问（带微信 referer）
+if imgs:
+    req=urllib.request.Request(imgs[len(imgs)//2], headers={'Referer':'https://mp.weixin.qq.com/'})
+    try: r=urllib.request.urlopen(req,timeout=15); print('IMG OK:', r.status, r.headers.get('content-type'))
+    except Exception as e: print('IMG ERR:', e)
+"
+```
+
+### ⚠️ 草稿编辑器里「图片显示破图」≠ 上传失败（高频误判）
+
+微信草稿**编辑页面**对 `mmbiz.qpic.cn` 图片有防盗链（referer 校验），在 PC 编辑态下**经常不渲染、显示破图图标**——但图片其实已成功上传、在手机预览和正式发布页都正常。
+
+- **判断真伪**：用上面脚本抽查一张图，带 `Referer: https://mp.weixin.qq.com/` 请求若返回 `HTTP 200 image/*`，就是好的，编辑器破图只是预览限制。
+- **让用户最终确认**：请用户在后台点「预览」发到手机查看，手机上图片会正常显示。
+- **不要**因为编辑器破图就反复重传或判定失败。
+
 ## 故障排除 (Agent 专用)
 
-- **IP 限制错误 (invalid ip)**：提醒用户将当前环境的出口 IP 加入微信后台的“IP 白名单”。
-- **40001 invalid credential / "could get access_token by getStableAccessToken"（高频坑）**：本公众号启用了**固定 access_token（stable_token）**模式，CLI 默认走的普通 `/cgi-bin/token` 端点返回的凭证会被写接口拒绝（报 40001），而**读接口不报错**，极具迷惑性。
-    - **✅ 正解（推荐）**：发布时加 `--stable-token` 选项，CLI 会改用 `/cgi-bin/stable_token` 取凭证并预置缓存。此为本仓库 `src/` 内置能力，升级 `@wenyan-md/core` 不会丢失：
+- **40164 invalid ip / invalid ip ... not in whitelist（会阻断发布，Agent 无法自行解决）**：当前出口 IP 不在公众号 IP 白名单里。**这是写接口硬性拦截，Agent 侧无论怎么重试都无用**，必须用户在微信后台操作：
+    - 后台路径：「设置与开发」→「基本配置」→「IP 白名单」，把报错里给出的 IP（如 `1.202.162.23`）加进去保存。
+    - 常见触发：换了网络、VPN、或出口 IP 变动。IP 可能几分钟后又变，必要时提醒用户加整段或用固定出口。
+    - 报错里已经带了需要加白的 IP，直接把那个 IP 原样告诉用户即可，不用自己查。
+    - 加白后再重试发布命令即可（无需改文章）。
+- **40001 invalid credential / 42001 access_token expired（高频坑）**：本公众号启用了**固定 access_token（stable_token）**模式。CLI 可能缓存了一个失效的旧 token，导致写接口报 40001/42001，而读接口不报错，极具迷惑性。
+    - **✅ 实测最稳的做法（优先用这个）**：发布命令前**先删掉缓存 token**再执行，几乎可解掉所有凭证类报错：
         ```bash
-        source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.js publish -f 文件.md -t orangeheart --stable-token
+        rm -f ~/.config/wenyan-md/token.json
+        source ~/.zshrc && node /opt/homebrew/lib/node_modules/@wenyan-md/cli/dist/cli.js publish -f 文件.md -t orangeheart
         ```
-      > 注：`--stable-token` 需使用**本仓库构建的 CLI**。若用的是 `pnpm add -g @wenyan-md/cli` 的旧版全局包且无此选项，请先 `pnpm build` 本仓库，或用下方兜底方案。
-    - **若凭证仍被拒**：清掉可能缓存的失效旧 token：`rm ~/.config/wenyan-md/token.json`，再重试。
-    - **快速判断**：拿 stable_token 做一次写操作若报 40007（而非 40001），说明凭证已过认证、只是缺 media_id——证明必须用 stable_token。
+      > 本仓库的实践：每次发布前都先 `rm -f ~/.config/wenyan-md/token.json`，让 CLI 重新取凭证，比依赖 `--stable-token` 更可靠。
+    - **关于 `--stable-token`**：部分已安装版本**并不支持**该选项，会直接报 `error: unknown option '--stable-token'`。遇到就去掉它、改用上面的「删缓存 + 重试」。不要反复尝试一个不存在的选项。
+    - **快速判断**：拿 stable_token 做一次写操作若报 40007（而非 40001），说明凭证已过认证、只是缺 media_id——证明走 stable_token 路径是对的。
+
+- **命令输出里的 `compdef:153: _comps: assignment to invalid subscript range` 噪声**：这是 `source ~/.zshrc` 触发的 zsh 补全告警，**与发布无关，可忽略**。看发布结果时用 `| grep -viE "compdef|_comps"` 过滤掉，只认 `发布成功，Media ID: xxxx` 这类真实回执。
 - **AppID/Secret 错误**：确认命令是否已前置 `source ~/.zshrc &&`；若仍失败，检查 `~/.zshrc` 中 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` 是否正确。
 - **图片上传失败**：确认 Markdown 中的本地图片路径在当前目录中真实存在。
 - **发布排版不符预期**：检查 YAML Frontmatter 是否符合规范。
